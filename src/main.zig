@@ -96,10 +96,8 @@ pub fn main() !void {
         }
     }
 
-    var chunk = try Chunk.create(allocator, &atlas, math.vec3(0,0,0));
-    var chunk2 = try Chunk.create(allocator, &atlas, math.vec3(16,0,0));
-    defer chunk.destroy();
-    defer chunk2.destroy();
+    var world = try World.create(allocator, &atlas, 16, 22);
+    defer world.destroy();
 
     //c.glPolygonMode(c.GL_FRONT_AND_BACK, c.GL_LINE);
 
@@ -132,8 +130,7 @@ pub fn main() !void {
         c.glUniformMatrix4fv(c.glGetUniformLocation(program, "mvp"), 1, c.GL_FALSE, &mvp.fields[0][0]);
 
         atlas.use();
-        chunk.render();
-        chunk2.render();
+        world.render();
 
         display.swap();
     }

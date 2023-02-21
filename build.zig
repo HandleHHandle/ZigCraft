@@ -17,11 +17,13 @@ pub fn build(b: *std.build.Builder) void {
     exe.linkLibC();
     exe.addIncludePath("libs/SDL2/include");
     exe.addIncludePath("libs/GLAD/include");
+    exe.addIncludePath("libs/NOISE/include");
     exe.addIncludePath("libs/MISC/include");
     exe.addLibraryPath("libs/SDL2/lib/x64");
     exe.linkSystemLibrary("OpenGL32");
     exe.linkSystemLibraryName("SDL2");
     exe.addCSourceFile("libs/GLAD/src/glad.c", &[_][]const u8{"-std=c99"});
+    exe.addCSourceFile("libs/NOISE/src/noise1234.c", &[_][]const u8{"-std=c99"});
     exe.install();
 
     const run_cmd = exe.run();

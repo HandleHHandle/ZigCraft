@@ -70,7 +70,7 @@ pub const Player = struct {
             mdir.y += 1;
         }
 
-        mdir = mdir.scale(5.0 * delta_time);
+        mdir = mdir.scale(15.0 * delta_time);
 
         player.position = player.position
             .add(player.cam_right.scale(mdir.x))

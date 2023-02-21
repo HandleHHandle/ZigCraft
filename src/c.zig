@@ -4,4 +4,6 @@ pub usingnamespace @cImport({
     @cDefine("STB_IMAGE_IMPLEMENTATION", "");
     @cDefine("STBI_ONLY_PNG", "");
     @cInclude("misc/stb_image.h");
+    @cInclude("stdlib.h");
+    @cInclude("noise1234.h");
 });
