@@ -1,5 +1,6 @@
 const std = @import("std");
 const TextureAtlas = @import("texture_atlas.zig").TextureAtlas;
+const Player = @import("player.zig").Player;
 const Chunk = @import("chunk.zig");
 const Generator = @import("generation.zig").Generator;
 const math = @import("zlm.zig");
@@ -8,6 +9,7 @@ pub const World = struct {
     const Self = @This();
 
     allocator: std.mem.Allocator,
+
     chunk_size: u8,
     generator: Generator,
     chunks: []Chunk.Chunk,
@@ -53,6 +55,10 @@ pub const World = struct {
         self.generator.destroy();
 
         self.allocator.free(self.chunks);
+    }
+
+    pub fn update(_: *Self) void {
+
     }
 
     pub fn render(self: *Self) void {

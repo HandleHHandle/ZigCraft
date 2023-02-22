@@ -1,14 +1,17 @@
 const std = @import("std");
 const Display = @import("display.zig").Display;
+const Shader = @import("shader.zig").Shader;
 const TextureAtlas = @import("texture_atlas.zig").TextureAtlas;
 const Player = @import("player.zig").Player;
 const Chunk = @import("chunk.zig").Chunk;
 const World = @import("world.zig").World;
 const math = @import("zlm.zig");
 
+const TextRenderer = @import("text.zig").TextRenderer;
+
 const c = @import("c.zig");
 
-const vertexSource =
+const vs_default =
     \\#version 330 core
     \\layout(location = 0) in vec3 vertex;
     \\layout(location = 1) in vec2 texcoord;
@@ -20,7 +23,7 @@ const vertexSource =
     \\}
 ;
 
-const fragmentSource =
+const fs_default =
     \\#version 330 core
     \\in vec2 uv;
     \\out vec4 outColor;
@@ -33,54 +36,16 @@ const fragmentSource =
 pub fn main() !void {
     var display = try Display.init("ZigCraft", 1280,720);
     defer display.shutdown();
+    display.setVsync(false);
 
-    // Shader stuff
-    var vertexShader = c.glCreateShader(c.GL_VERTEX_SHADER);
-    c.glShaderSource(vertexShader, 1, &@ptrCast([*]const u8, vertexSource), null);
-    c.glCompileShader(vertexShader);
-    var success: i32 = 0;
-    var infoLog: [512]u8 = undefined;
-    c.glGetShaderiv(vertexShader, c.GL_COMPILE_STATUS, &success);
-    if (success == 0) {
-        std.debug.print("Called", .{});
-        c.glGetShaderInfoLog(vertexShader, 512, null, &infoLog);
-        std.debug.print("{any}", .{infoLog});
-    }
-
-    var fragmentShader = c.glCreateShader(c.GL_FRAGMENT_SHADER);
-    c.glShaderSource(fragmentShader, 1, &@ptrCast([*]const u8, fragmentSource), null);
-    c.glCompileShader(fragmentShader);
-    c.glGetShaderiv(vertexShader, c.GL_COMPILE_STATUS, &success);
-    if (success == 0) {
-        std.debug.print("Called", .{});
-        c.glGetShaderInfoLog(vertexShader, 512, null, &infoLog);
-        std.debug.print("{any}", .{infoLog});
-    }
-
-    var program = c.glCreateProgram();
-    c.glAttachShader(program, vertexShader);
-    c.glAttachShader(program, fragmentShader);
-    c.glLinkProgram(program);
-    c.glGetProgramiv(program, c.GL_LINK_STATUS, &success);
-    if (success == 0) {
-        std.debug.print("Called", .{});
-        c.glGetProgramInfoLog(program, 512, null, &infoLog);
-        std.debug.print("{s}", .{infoLog});
-    }
-
-    c.glDeleteShader(vertexShader);
-    c.glDeleteShader(fragmentShader);
+    var shader = Shader.create(vs_default,fs_default);
+    defer shader.destroy();
 
     // Texture stuff
     var atlas = try TextureAtlas.create("resources/images/texture_atlas.png", 8);
     defer atlas.destroy();
 
     // Math stuff
-    var translation = math.Mat4.createTranslation(math.vec3(0,0,1));
-    var scale = math.Mat4.createScale(1,1,1);
-    var rotation = math.Mat4.createAngleAxis(math.vec3(0,0,1), math.toRadians(0.0));
-    var model = math.Mat4.batchMul(&[_]math.Mat4 {translation,scale,rotation});
-
     var projection = math.Mat4.createPerspective(math.toRadians(90.0), 16.0 / 9.0, 0.01,1000.0);
 
     // World stuff
@@ -99,8 +64,10 @@ pub fn main() !void {
     var world = try World.create(allocator, &atlas, 16, 22);
     defer world.destroy();
 
-    //c.glPolygonMode(c.GL_FRONT_AND_BACK, c.GL_LINE);
+    var text_renderer = try TextRenderer.create("resources/fonts/modern_dos.ttf", 48);
+    defer text_renderer.destroy();
 
+    var polygon_mode: bool = false;
     var now = c.SDL_GetPerformanceCounter();
     var last = now;
     var delta_time: f32 = 0.0;
@@ -110,9 +77,14 @@ pub fn main() !void {
         delta_time = @floatCast(f32, @intToFloat(f64, (now - last) * 1000) / @intToFloat(f64, c.SDL_GetPerformanceFrequency()) * 0.001);
 
         display.input();
-
-        player.update(delta_time);
-
+        
+        if(display.keyPressed(c.SDLK_f)) {
+            display.setFullscreen(!display.fullscreen);
+        }
+        if(display.keyPressed(c.SDLK_x)) {
+            polygon_mode = !polygon_mode;
+            c.glPolygonMode(c.GL_FRONT_AND_BACK, if(polygon_mode) c.GL_LINE else c.GL_FILL);
+        }
         if(display.keyPressed(c.SDLK_ESCAPE) and display.cursorCaptured()) {
             display.releaseCursor();
         }
@@ -120,17 +92,27 @@ pub fn main() !void {
             display.captureCursor();
         }
 
+        player.update(delta_time);
+        world.update();
+
         c.glClear(c.GL_COLOR_BUFFER_BIT | c.GL_DEPTH_BUFFER_BIT);
 
-        c.glUseProgram(program);
+        shader.use();
 
         var view = player.getViewMatrix();
-        var mvp = math.Mat4.batchMul(&[_]math.Mat4 {model, view, projection});
+        var mvp = math.Mat4.batchMul(&[_]math.Mat4 {view, projection});
 
-        c.glUniformMatrix4fv(c.glGetUniformLocation(program, "mvp"), 1, c.GL_FALSE, &mvp.fields[0][0]);
+        shader.setMat4("mvp", mvp);
 
         atlas.use();
         world.render();
+
+        const position = try std.fmt.allocPrint(allocator, "({d:.2},{d:.2},{d:.2})", .{player.position.x,player.position.y,player.position.z});
+        defer allocator.free(position);
+        const fps = try std.fmt.allocPrint(allocator, "FPS: {d:.2}", .{1.0 / delta_time});
+        defer allocator.free(fps);
+        try text_renderer.renderSlice(allocator, position, math.vec2(-2.25,3.9));
+        try text_renderer.renderSlice(allocator, fps, math.vec2(-2.25, -3.5));
 
         display.swap();
     }

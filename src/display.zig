@@ -9,6 +9,7 @@ pub const Display = struct {
     window: *c.SDL_Window,
     context: c.SDL_GLContext,
     running: bool,
+    fullscreen: bool,
     keys: [1024]bool,
     previous_keys: [1024]bool,
     mouse_buttons: [5]bool,
@@ -20,6 +21,11 @@ pub const Display = struct {
         if(c.SDL_Init(c.SDL_INIT_VIDEO) != 0) {
             c.SDL_Log("Unable to initialize SDL: %s", c.SDL_GetError());
             return error.SDLInitializationFailed;
+        }
+
+        if(c.TTF_Init() != 0) {
+            c.SDL_Log("Unable to initialize SDL_ttf: %s", c.TTF_GetError());
+            return error.TTFInitializationFailed;
         }
 
         var window = c.SDL_CreateWindow(
@@ -37,7 +43,6 @@ pub const Display = struct {
         _ = c.SDL_GL_SetAttribute(c.SDL_GL_CONTEXT_MINOR_VERSION, 3);
         _ = c.SDL_GL_SetAttribute(c.SDL_GL_DOUBLEBUFFER, 1);
         _ = c.SDL_GL_SetAttribute(c.SDL_GL_DEPTH_SIZE, 24);
-        _ = c.SDL_GL_SetSwapInterval(0);
 
         var context = c.SDL_GL_CreateContext(window);
         if(context == null) {
@@ -49,9 +54,11 @@ pub const Display = struct {
             c.SDL_Log("Failed to initialize GLAD");
         }
 
-        c.glViewport(0,0, 1280,720);
+        c.glViewport(0,0, width,height);
         c.glEnable(c.GL_DEPTH_TEST);
         c.glEnable(c.GL_BLEND);
+        c.glEnable(c.GL_TEXTURE_2D);
+        c.glBlendFunc(c.GL_SRC_ALPHA, c.GL_ONE_MINUS_SRC_ALPHA);
         c.glEnable(c.GL_CULL_FACE);
         c.glCullFace(c.GL_BACK);
         c.glClearColor(1, 0, 0, 1);
@@ -65,6 +72,7 @@ pub const Display = struct {
             .window = window,
             .context = context,
             .running = true,
+            .fullscreen = false,
             .keys = keys,
             .previous_keys = previous_keys,
             .mouse_buttons = buttons,
@@ -77,6 +85,7 @@ pub const Display = struct {
     pub fn shutdown(display: *Display) void {
         c.SDL_GL_DeleteContext(display.context);
         c.SDL_DestroyWindow(display.window);
+        c.TTF_Quit();
         c.SDL_Quit();
     }
 
@@ -112,9 +121,23 @@ pub const Display = struct {
                     display.mouse_buttons[@intCast(usize, event.@"button".@"button")] = false;
                 },
 
+                c.SDL_WINDOWEVENT => {
+                    if(event.@"window".@"event" == c.SDL_WINDOWEVENT_SIZE_CHANGED) {
+                        c.glViewport(0,0, event.@"window".@"data1",event.@"window".@"data2");
+                    }
+                },
+
                 else => {},
             }
         }
+    }
+
+    pub fn setFullscreen(self: *Self, fullscreen: bool) void {
+        _ = c.SDL_SetWindowFullscreen(self.window, if(fullscreen) c.SDL_WINDOW_FULLSCREEN else 0);
+    }
+
+    pub fn setVsync(_: *Self, vsync: bool) void {
+        _ = c.SDL_GL_SetSwapInterval(if(vsync) 1 else 0);
     }
 
     pub fn captureCursor(display: *Display) void {
