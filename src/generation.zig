@@ -30,7 +30,7 @@ pub const Generator = struct {
 
     }
 
-    pub fn generateChunk(self: *Self, offset: math.Vec2) !Chunk.Chunk {
+    pub fn generateChunk(self: *Self, offset: math.Vec2) !*Chunk.Chunk {
         c.srand(self.seed + @truncate(u32, hashVec2(offset)));
 
         var data: []u8 = try self.allocator.alloc(u8, Chunk.CHUNK_VOLUME);
@@ -45,7 +45,7 @@ pub const Generator = struct {
                 while(z < Chunk.CHUNK_HEIGHT) : (z += 1) {
                     var index: usize = (x * Chunk.CHUNK_HEIGHT) + (y * Chunk.CHUNK_HEIGHT * Chunk.CHUNK_SIZE) + z;
 
-                    if(z < 60 + @floatToInt(usize, @fabs(@round(value * 100)))) {
+                    if(z < 80 + @floatToInt(i32, @round(value * 10))) {
                         data[index] = 1;
                     } else {
                         data[index] = 0;
@@ -54,6 +54,8 @@ pub const Generator = struct {
             }
         }
 
-        return try Chunk.Chunk.create(self.allocator, data, self.atlas, offset);
+        var chunk: *Chunk.Chunk = try self.allocator.create(Chunk.Chunk);
+        chunk.* = try Chunk.Chunk.create(self.allocator, data, self.atlas, offset);
+        return chunk;
     }
 };

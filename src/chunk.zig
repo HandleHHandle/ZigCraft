@@ -65,6 +65,14 @@ pub const Mesh = struct {
     }
 };
 
+pub fn getChunkPosFromPos(pos: math.Vec3) math.Vec2 {
+    var chunk_pos = math.vec2(pos.x,pos.z);
+    chunk_pos.x = @floor(chunk_pos.x / CHUNK_SIZE);
+    chunk_pos.y = @floor(chunk_pos.y / CHUNK_SIZE);
+
+    return chunk_pos;
+}
+
 pub const Chunk = struct {
     const Self = @This();
 

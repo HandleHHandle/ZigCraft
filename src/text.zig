@@ -126,10 +126,10 @@ pub const TextRenderer = struct {
 
         self.shader.use();
 
-        var size = @intToFloat(f32, self.size) / 10.0;
+        var size = @intToFloat(f32, self.size) / 200.0;
         var ratio = @intToFloat(f32, surface.*.w) / @intToFloat(f32, surface.*.h);
         var translation = math.Mat4.createTranslation(math.vec3(position.x,position.y,0.0));
-        var scale = math.Mat4.createScale(ratio / 2.0 / size, 1.0 / size,1);
+        var scale = math.Mat4.createScale(ratio / 2.0 * size, size,1);
         var model = math.Mat4.batchMul(&[_]math.Mat4 {scale,translation});
         self.shader.setMat4("model", model);
 

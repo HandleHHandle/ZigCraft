@@ -3,7 +3,7 @@ const Display = @import("display.zig").Display;
 const Shader = @import("shader.zig").Shader;
 const TextureAtlas = @import("texture_atlas.zig").TextureAtlas;
 const Player = @import("player.zig").Player;
-const Chunk = @import("chunk.zig").Chunk;
+const Chunk = @import("chunk.zig");
 const World = @import("world.zig").World;
 const math = @import("zlm.zig");
 
@@ -37,6 +37,7 @@ pub fn main() !void {
     var display = try Display.init("ZigCraft", 1280,720);
     defer display.shutdown();
     display.setVsync(false);
+    display.clearColor(126,192,238,255);
 
     var shader = Shader.create(vs_default,fs_default);
     defer shader.destroy();
@@ -48,10 +49,6 @@ pub fn main() !void {
     // Math stuff
     var projection = math.Mat4.createPerspective(math.toRadians(90.0), 16.0 / 9.0, 0.01,1000.0);
 
-    // World stuff
-    var player = Player.init(&display);
-    player.position = math.vec3(0,80,-16);
-
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
     defer {
@@ -61,7 +58,11 @@ pub fn main() !void {
         }
     }
 
-    var world = try World.create(allocator, &atlas, 16, 22);
+    // World stuff
+    var player = Player.init(&display);
+    player.position = math.vec3(70,80,-70);
+
+    var world = try World.create(allocator, &player,&atlas, 16, 1344);
     defer world.destroy();
 
     var text_renderer = try TextRenderer.create("resources/fonts/modern_dos.ttf", 48);
@@ -92,8 +93,7 @@ pub fn main() !void {
             display.captureCursor();
         }
 
-        player.update(delta_time);
-        world.update();
+        try world.update(delta_time);
 
         c.glClear(c.GL_COLOR_BUFFER_BIT | c.GL_DEPTH_BUFFER_BIT);
 
@@ -107,12 +107,16 @@ pub fn main() !void {
         atlas.use();
         world.render();
 
-        const position = try std.fmt.allocPrint(allocator, "({d:.2},{d:.2},{d:.2})", .{player.position.x,player.position.y,player.position.z});
+        const position = try std.fmt.allocPrint(allocator, "Position: {d:.2},{d:.2},{d:.2}", .{player.position.x,player.position.y,player.position.z});
         defer allocator.free(position);
         const fps = try std.fmt.allocPrint(allocator, "FPS: {d:.2}", .{1.0 / delta_time});
         defer allocator.free(fps);
+        const chunk_pos = Chunk.getChunkPosFromPos(player.position);
+        const cp = try std.fmt.allocPrint(allocator, "Chunk: {d},{d}", .{chunk_pos.x,chunk_pos.y});
+        defer allocator.free(cp);
         try text_renderer.renderSlice(allocator, position, math.vec2(-2.25,3.9));
         try text_renderer.renderSlice(allocator, fps, math.vec2(-2.25, -3.5));
+        try text_renderer.renderSlice(allocator, cp, math.vec2(-2.25, 3.5));
 
         display.swap();
     }

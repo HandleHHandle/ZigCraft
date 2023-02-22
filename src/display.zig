@@ -61,7 +61,7 @@ pub const Display = struct {
         c.glBlendFunc(c.GL_SRC_ALPHA, c.GL_ONE_MINUS_SRC_ALPHA);
         c.glEnable(c.GL_CULL_FACE);
         c.glCullFace(c.GL_BACK);
-        c.glClearColor(1, 0, 0, 1);
+        c.glClearColor(0, 0, 0, 1);
 
         var keys: [1024]bool = undefined;
         var previous_keys: [1024]bool = undefined;
@@ -104,10 +104,18 @@ pub const Display = struct {
                 },
 
                 c.SDL_KEYDOWN => {
-                    display.keys[@intCast(usize, event.@"key".@"keysym".@"sym")] = true;
+                    var index: usize = @intCast(usize, event.@"key".@"keysym".@"sym");
+                    if(index > 127) {
+                        index -= 1073741753;
+                    }
+                    display.keys[index] = true;
                 },
                 c.SDL_KEYUP => {
-                    display.keys[@intCast(usize, event.@"key".@"keysym".@"sym")] = false;
+                    var index: usize = @intCast(usize, event.@"key".@"keysym".@"sym");
+                    if(index > 127) {
+                        index -= 1073741753;
+                    }
+                    display.keys[index] = false;
                 },
 
                 c.SDL_MOUSEMOTION => {
@@ -140,6 +148,14 @@ pub const Display = struct {
         _ = c.SDL_GL_SetSwapInterval(if(vsync) 1 else 0);
     }
 
+    pub fn clearColor(_: *Self, r: u8,g: u8,b: u8,a: u8) void {
+        var fr: f32 = @intToFloat(f32, r) / 255.0;
+        var fg: f32 = @intToFloat(f32, g) / 255.0;
+        var fb: f32 = @intToFloat(f32, b) / 255.0;
+        var fa: f32 = @intToFloat(f32, a) / 255.0;
+        c.glClearColor(fr,fg,fb,fa);
+    }
+
     pub fn captureCursor(display: *Display) void {
         _ = c.SDL_SetRelativeMouseMode(c.SDL_TRUE);
         display.mouse_captured = true;
@@ -155,19 +171,35 @@ pub const Display = struct {
     }
 
     pub fn keyPressed(display: *Display, keycode: c.SDL_KeyCode) bool {
-        return display.keys[keycode] and !display.previous_keys[keycode];
+        var index: usize = @intCast(usize, keycode);
+        if(index > 127) {
+            index -= 1073741753;
+        }
+        return display.keys[index] and !display.previous_keys[index];
     }
 
     pub fn keyReleased(display: *Display, keycode: c.SDL_KeyCode) bool {
-        return !display.keys[keycode] and display.previous_keys[keycode];
+        var index: usize = @intCast(usize, keycode);
+        if(index > 127) {
+            index -= 1073741753;
+        }
+        return !display.keys[index] and display.previous_keys[index];
     }
 
     pub fn keyDown(display: *Display, keycode: c.SDL_KeyCode) bool {
-        return display.keys[keycode];
+        var index: usize = @intCast(usize, keycode);
+        if(index > 127) {
+            index -= 1073741753;
+        }
+        return display.keys[index];
     }
 
     pub fn keyUp(display: *Display, keycode: c.SDL_KeyCode) bool {
-        return !display.keys[keycode];
+        var index: usize = @intCast(usize, keycode);
+        if(index > 127) {
+            index -= 1073741753;
+        }
+        return !display.keys[index];
     }
 
     pub fn getMouseDelta(display: *Display) math.Vec2 {

@@ -30,7 +30,8 @@ pub const Player = struct {
 
         if(display.cursorCaptured()) {
             var delta = display.getMouseDelta();
-            delta = delta.scale(50.0 * delta_time);
+            //delta = delta.scale(50.0 * delta_time);
+            delta = delta.scale(0.4);
             player.cam_rotation.x -= delta.y;
             player.cam_rotation.x = std.math.clamp(player.cam_rotation.x, -89.0,89.0);
             player.cam_rotation.y -= delta.x;
@@ -40,7 +41,7 @@ pub const Player = struct {
             rot.y = @sin(math.toRadians(player.cam_rotation.x));
             rot.z = @sin(math.toRadians(player.cam_rotation.y)) * @cos(math.toRadians(player.cam_rotation.x));
             player.cam_forward = rot.normalize();
-            player.cam_right = player.up.cross(player.cam_forward);
+            player.cam_right = player.up.cross(player.cam_forward).normalize();
         }
 
         var mdir = math.vec3(0,0,0);
@@ -62,11 +63,11 @@ pub const Player = struct {
             mdir.x += 1;
         }
         // Down
-        if(display.keyDown(c.SDLK_q)) {
+        if(display.keyDown(c.SDLK_LSHIFT)) {
             mdir.y -= 1;
         }
         // Up
-        if(display.keyDown(c.SDLK_e)) {
+        if(display.keyDown(c.SDLK_SPACE)) {
             mdir.y += 1;
         }
 
