@@ -4,7 +4,7 @@ const Shader = @import("shader.zig").Shader;
 const TextureAtlas = @import("texture_atlas.zig").TextureAtlas;
 const Player = @import("player.zig").Player;
 const Chunk = @import("chunk.zig");
-const World = @import("world.zig").World;
+const World = @import("world.zig");
 const math = @import("zlm.zig");
 
 const TextRenderer = @import("text.zig").TextRenderer;
@@ -62,13 +62,13 @@ pub fn main() !void {
     var player = Player.init(&display);
     player.position = math.vec3(70,80,-70);
 
-    var world = try World.create(allocator, &player,&atlas, 16, 1344);
+    var world = try World.World.create(allocator, &player,&atlas, 16, 1344);
     defer world.destroy();
 
     var text_renderer = try TextRenderer.create("resources/fonts/modern_dos.ttf", 48);
     defer text_renderer.destroy();
 
-    var polygon_mode: bool = false;
+    var polygon_mode: c.GLuint = c.GL_FILL;
     var now = c.SDL_GetPerformanceCounter();
     var last = now;
     var delta_time: f32 = 0.0;
@@ -83,8 +83,8 @@ pub fn main() !void {
             display.setFullscreen(!display.fullscreen);
         }
         if(display.keyPressed(c.SDLK_x)) {
-            polygon_mode = !polygon_mode;
-            c.glPolygonMode(c.GL_FRONT_AND_BACK, if(polygon_mode) c.GL_LINE else c.GL_FILL);
+            polygon_mode = if(polygon_mode == c.GL_FILL) c.GL_LINE else c.GL_FILL;
+            c.glPolygonMode(c.GL_FRONT_AND_BACK, polygon_mode);
         }
         if(display.keyPressed(c.SDLK_ESCAPE) and display.cursorCaptured()) {
             display.releaseCursor();
@@ -107,16 +107,23 @@ pub fn main() !void {
         atlas.use();
         world.render();
 
-        const position = try std.fmt.allocPrint(allocator, "Position: {d:.2},{d:.2},{d:.2}", .{player.position.x,player.position.y,player.position.z});
+        const block_pos = World.worldPosToBlockPos(player.position);
+        const position = try std.fmt.allocPrint(allocator, "Position: {d},{d},{d}", .{block_pos.x,block_pos.y,block_pos.z});
         defer allocator.free(position);
         const fps = try std.fmt.allocPrint(allocator, "FPS: {d:.2}", .{1.0 / delta_time});
         defer allocator.free(fps);
         const chunk_pos = Chunk.getChunkPosFromPos(player.position);
         const cp = try std.fmt.allocPrint(allocator, "Chunk: {d},{d}", .{chunk_pos.x,chunk_pos.y});
         defer allocator.free(cp);
+        if(polygon_mode == c.GL_LINE) {
+            c.glPolygonMode(c.GL_FRONT_AND_BACK, c.GL_FILL);
+        }
         try text_renderer.renderSlice(allocator, position, math.vec2(-2.25,3.9));
         try text_renderer.renderSlice(allocator, fps, math.vec2(-2.25, -3.5));
         try text_renderer.renderSlice(allocator, cp, math.vec2(-2.25, 3.5));
+        if(polygon_mode == c.GL_LINE) {
+            c.glPolygonMode(c.GL_FRONT_AND_BACK, c.GL_LINE);
+        }
 
         display.swap();
     }

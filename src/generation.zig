@@ -1,7 +1,6 @@
 const std = @import("std");
 const math = @import("zlm.zig");
 const Chunk = @import("chunk.zig");
-const TextureAtlas = @import("texture_atlas.zig").TextureAtlas;
 const c = @import("c.zig");
 
 fn hashVec2(vec: math.Vec2) u64 {
@@ -16,13 +15,11 @@ pub const Generator = struct {
 
     allocator: std.mem.Allocator,
     seed: u32,
-    atlas: *TextureAtlas,
 
-    pub fn create(allocator: std.mem.Allocator, seed: u32, atlas: *TextureAtlas) Self {
+    pub fn create(allocator: std.mem.Allocator, seed: u32) Self {
         return Self {
             .allocator = allocator,
             .seed = seed,
-            .atlas = atlas,
         };
     }
 
@@ -55,7 +52,7 @@ pub const Generator = struct {
         }
 
         var chunk: *Chunk.Chunk = try self.allocator.create(Chunk.Chunk);
-        chunk.* = try Chunk.Chunk.create(self.allocator, data, self.atlas, offset);
+        chunk.* = try Chunk.Chunk.create(self.allocator, data, offset);
         return chunk;
     }
 };

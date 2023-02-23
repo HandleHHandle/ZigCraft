@@ -55,8 +55,18 @@ pub const Mesh = struct {
         c.glDeleteVertexArrays(1, &mesh.vao);
     }
 
-    pub fn update(_: *Mesh) void {
-    
+    pub fn update(self: *Mesh, vertices: []f32, indices: []u32) void {
+        c.glBindVertexArray(self.vao);
+
+        c.glBindBuffer(c.GL_ARRAY_BUFFER, self.vbo);
+        c.glBufferData(c.GL_ARRAY_BUFFER, @intCast(u32, @sizeOf(f32) * vertices.len), @ptrCast(*const anyopaque, vertices.ptr), c.GL_STATIC_DRAW);
+
+        c.glBindBuffer(c.GL_ELEMENT_ARRAY_BUFFER, self.ebo);
+        c.glBufferData(c.GL_ELEMENT_ARRAY_BUFFER, @intCast(u32, @sizeOf(u32) * indices.len), @ptrCast(*const anyopaque, indices.ptr), c.GL_STATIC_DRAW);
+
+        c.glBindVertexArray(0);
+
+        self.index_count = @intCast(i32, indices.len);
     }
 
     pub fn render(mesh: *Mesh) void {
@@ -79,11 +89,34 @@ pub const Chunk = struct {
     allocator: std.mem.Allocator,
     data: []u8,
     mesh: Mesh,
+    generated_mesh: bool,
     offset: math.Vec2,
 
-    pub fn create(allocator: std.mem.Allocator, data: []u8, atlas: *TextureAtlas, offset: math.Vec2) !Self {
-        var vertices = try std.ArrayList(f32).initCapacity(allocator, 24 * CHUNK_SIZE * CHUNK_SIZE * CHUNK_HEIGHT);
-        var indices = try std.ArrayList(u32).initCapacity(allocator, 36 * CHUNK_SIZE * CHUNK_SIZE * CHUNK_HEIGHT);
+    pub fn create(allocator: std.mem.Allocator, data: []u8, offset: math.Vec2) !Self {
+        var mesh = Mesh.create(&[0]f32 {},&[0]u32 {});
+
+        return Self {
+            .allocator = allocator,
+            .data = data,
+            .mesh = mesh,
+            .generated_mesh = true,
+            .offset = offset,
+        };
+    }
+
+    pub fn destroy(self: *Chunk) void {
+        self.allocator.free(self.data);
+        self.mesh.destroy();
+    }
+
+    pub fn getBlock(self: *Chunk, x: usize,y: usize,z: usize) u8 {
+        var index: usize = (x * CHUNK_HEIGHT) + (y * CHUNK_HEIGHT * CHUNK_SIZE) + z;
+        return self.data[index];
+    }
+
+    pub fn genMesh(self: *Chunk, neighbors: [4]?*Chunk, atlas: *TextureAtlas) !void {
+        var vertices = try std.ArrayList(f32).initCapacity(self.allocator, 24 * CHUNK_SIZE * CHUNK_SIZE * CHUNK_HEIGHT);
+        var indices = try std.ArrayList(u32).initCapacity(self.allocator, 36 * CHUNK_SIZE * CHUNK_SIZE * CHUNK_HEIGHT);
         var index_offset: u32 = 0;
 
         var x: usize = 0;
@@ -93,27 +126,22 @@ pub const Chunk = struct {
                 var z: usize = 0;
                 while(z < CHUNK_HEIGHT) : (z += 1) {
                     var index: usize = (x * CHUNK_HEIGHT) + (y * CHUNK_HEIGHT * CHUNK_SIZE) + z;
-                    if(data[index] != 0) {
-                        var left = if(x > 0) data[index - CHUNK_HEIGHT] else 0;
-                        var right = if(x < CHUNK_SIZE-1) data[index + CHUNK_HEIGHT] else 0;
-                        var backward = if(y > 0) data[index - CHUNK_HEIGHT * CHUNK_SIZE] else 0;
-                        var forward = if(y < CHUNK_SIZE-1) data[index + CHUNK_HEIGHT * CHUNK_SIZE] else 0;
-                        var bottom = if(z > 0) data[index - 1] else 0;
-                        var top = if(z < CHUNK_HEIGHT-1) data[index + 1] else 0;
+                    if(self.data[index] != 0) {
+                        var left = if(x > 0) self.data[index - CHUNK_HEIGHT] else (if(neighbors[0] == null) 1 else neighbors[0].?.getBlock(15,y,z));
+                        var right = if(x < CHUNK_SIZE-1) self.data[index + CHUNK_HEIGHT] else (if(neighbors[2] == null) 1 else neighbors[2].?.getBlock(0,y,z));
+                        var backward = if(y > 0) self.data[index - CHUNK_HEIGHT * CHUNK_SIZE] else (if(neighbors[3] == null) 1 else neighbors[3].?.getBlock(x,15,z));
+                        var forward = if(y < CHUNK_SIZE-1) self.data[index + CHUNK_HEIGHT * CHUNK_SIZE] else (if(neighbors[1] == null) 1 else neighbors[1].?.getBlock(x,0,z));
+                        var bottom = if(z > 0) self.data[index - 1] else 1;
+                        var top = if(z < CHUNK_HEIGHT-1) self.data[index + 1] else 1;
 
                         var offsets = atlas.getFaceOffsets();
-                        var front_coords = atlas.getFaceCoords(1,0);
-                        var back_coords = atlas.getFaceCoords(1,0);
-                        var left_coords = atlas.getFaceCoords(1,0);
-                        var right_coords = atlas.getFaceCoords(1,0);
-                        var top_coords = atlas.getFaceCoords(0,0);
-                        var bottom_coords = atlas.getFaceCoords(2,0);
 
-                        var ox = @intToFloat(f32, x) + offset.x * CHUNK_SIZE;
-                        var oy = @intToFloat(f32, y) + offset.y * CHUNK_SIZE;
+                        var ox = @intToFloat(f32, x) + self.offset.x * CHUNK_SIZE;
+                        var oy = @intToFloat(f32, y) + self.offset.y * CHUNK_SIZE;
                         var oz = @intToFloat(f32, z);
 
                         if(left == 0) {
+                            var left_coords = atlas.getFaceCoords(1,0);
                             var tex_bl = left_coords;
                             var tex_tl = tex_bl.add(math.vec2(0, offsets.y));
                             var tex_br = tex_bl.add(math.vec2(offsets.x, 0));
@@ -134,6 +162,7 @@ pub const Chunk = struct {
                             index_offset += 4;
                         }
                         if(right == 0) {
+                            var right_coords = atlas.getFaceCoords(1,0);
                             var tex_bl = right_coords;
                             var tex_tl = tex_bl.add(math.vec2(0, offsets.y));
                             var tex_br = tex_bl.add(math.vec2(offsets.x, 0));
@@ -154,6 +183,7 @@ pub const Chunk = struct {
                             index_offset += 4;
                         }
                         if(backward == 0) {
+                            var front_coords = atlas.getFaceCoords(1,0);
                             var tex_bl = front_coords;
                             var tex_tl = tex_bl.add(math.vec2(0, offsets.y));
                             var tex_br = tex_bl.add(math.vec2(offsets.x, 0));
@@ -174,6 +204,7 @@ pub const Chunk = struct {
                             index_offset += 4;
                         }
                         if(forward == 0) {
+                            var back_coords = atlas.getFaceCoords(1,0);
                             var tex_bl = back_coords;
                             var tex_tl = tex_bl.add(math.vec2(0, offsets.y));
                             var tex_br = tex_bl.add(math.vec2(offsets.x, 0));
@@ -194,6 +225,7 @@ pub const Chunk = struct {
                             index_offset += 4;
                         }
                         if(bottom == 0) {
+                            var bottom_coords = atlas.getFaceCoords(2,0);
                             var tex_bl = bottom_coords;
                             var tex_tl = tex_bl.add(math.vec2(0, offsets.y));
                             var tex_br = tex_bl.add(math.vec2(offsets.x, 0));
@@ -214,6 +246,7 @@ pub const Chunk = struct {
                             index_offset += 4;
                         }
                         if(top == 0) {
+                            var top_coords = atlas.getFaceCoords(0,0);
                             var tex_bl = top_coords;
                             var tex_tl = tex_bl.add(math.vec2(0, offsets.y));
                             var tex_br = tex_bl.add(math.vec2(offsets.x, 0));
@@ -238,22 +271,11 @@ pub const Chunk = struct {
             }
         }
 
-        var mesh = Mesh.create(vertices.items,indices.items);
-
+        self.mesh.update(vertices.items,indices.items);
         vertices.deinit();
         indices.deinit();
 
-        return Self {
-            .allocator = allocator,
-            .data = data,
-            .mesh = mesh,
-            .offset = offset,
-        };
-    }
-
-    pub fn destroy(self: *Chunk) void {
-        self.allocator.free(self.data);
-        self.mesh.destroy();
+        self.generated_mesh = true;
     }
 
     pub fn render(chunk: *Chunk) void {
